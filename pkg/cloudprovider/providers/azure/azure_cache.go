@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 )
 
 // cacheReadType defines the read type for cache data
@@ -36,6 +37,9 @@ const (
 	// active/expired. If entry doesn't exist in cache, then data is fetched
 	// using getter, saved in cache and returned
 	cacheReadTypeUnsafe
+	// cacheReadTypeForceRefresh force refreshes the cache even if the cache entry
+	// is not expired
+	cacheReadTypeForceRefresh
 )
 
 // getFunc defines a getter function for timedCache.
@@ -120,12 +124,16 @@ func (t *timedCache) Get(key string, crt cacheReadType) (interface{}, error) {
 
 	// entry exists
 	if entry.data != nil {
+		// force refresh the cache to get the current accurate data
+		if crt == cacheReadTypeForceRefresh {
+			klog.V(5).Infof("Forcing refreshing the cache for %s", key)
+		}
 		// allow unsafe read, so return data even if expired
 		if crt == cacheReadTypeUnsafe {
 			return entry.data, nil
 		}
 		// if cached data is not expired, return cached data
-		if time.Since(entry.createdOn) < t.ttl {
+		if crt == cacheReadTypeDefault && time.Since(entry.createdOn) < t.ttl {
 			return entry.data, nil
 		}
 	}
